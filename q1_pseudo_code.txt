@@ -1,32 +1,69 @@
 hashmap map
 while 1
   receive OFPacketIn
-  s = socket that sent OFPacketIn
+  s = switch that sent OFPacketIn
   si = source interface
   di = destination interface
   src = source address of OFPacketIn
   dst = destination address of OFPacketIn
-  n = linked list node
+  n = listNode
+  prev_n = previous listNode
+  bool interface_found = false
+
+  struct listNode
+  {
+    String switch;
+    int interface;
+    listNode next;
+  }
 
   //add src to map if not already there
   if map contains key src
     //get linked list node from map with key src
     n = map.get(src)
-    while n != null
-      if n.switch = s
-        if n.interface == null
+    while n != null {
+      if n.switch = s {
+        if n.interface == null {
           n.interface == si
+          interface_found = true
           break
-  else create map entry with key src
-  if linked list doesn't contain node for switch s
-    add node to linked list for switch s
+        }
+      }
+      prev_n = n
+      n = n.next
+    }
+
+    if interface_found == false {
+      new listNode temp
+      temp.switch = s
+      temp.interface = si
+      temp.next = NULL
+      prev_n.next = temp
+    }
+
+  else{ //create map entry with key src
+    new listNode n
+    n.switch = s
+    n.interface = si
+    map.put(src, n)
+  }
 
   //get interface for dst
-  check map for key dst
-  if map contains dst
-    search linked list for switch s
-    if list contains s
-      send packet through interface in node
-  else
-    for every interface except si
-      send the packet
+  if(map.contains(dst)){
+    n = map.get(dst) //listNode
+    while (n != null) {
+      if n.switch = s {
+        if n.interface != null {
+          di = n.interface
+          interface_found = true
+          break
+        }
+      }
+      prev_n = n
+      n = n.next
+    }
+    if(interface_found == false){
+      //tell switch to flood packet on every
+      //interface except source interface
+    }
+  }
