@@ -46,7 +46,7 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         interface = interfaceItem;
       }
     }
-    static HashMap<String, Node> map = new HashMap<>();
+    static HashMap<MacAddress, Node> map = new HashMap<>();
     /**
      * @param floodlightProvider the floodlightProvider to set
      */
@@ -65,8 +65,8 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
           boolean interfaceFound = false;
           DatapathId switchMac = sw.getId()
           int interface = packetin_msg.getInPort()
-          String src = eth.getSourceMACAddress()/*.toString()*/;
-          Stirng dst = eth.getDestinationMACAddress()/*.toString()*/;
+          MacAddress src = eth.getSourceMACAddress();
+          MacAddress dst = eth.getDestinationMACAddress();
           int dstInterface;
           if(map.containsKey(src)) {
             Node n = map.get(src);
@@ -112,10 +112,14 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             if(interfaceFound) {
               //Tell switch to forward packet out this interface
               //Install flow entry
+              OFMatch match = new OFMatch();
+              match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_TYPE).matchOn(Flag.NW_DST).withNwDstMask(24));
+              match.setDataLayerType(Ethernet.TYPE_MacAddress);
             }
             else {
               //tell switch to flood packet on every
               //interface except source interface
+
             }
           }
 
