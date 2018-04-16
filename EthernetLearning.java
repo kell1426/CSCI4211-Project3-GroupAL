@@ -36,40 +36,17 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     /*
         # PROJ3 Define your data structures here
     */
-    // class SwitchTable {
-    //   String switchName;
-    //   int interface;
-    //   public SwitchTable(String switchName, int interface) {
-    //     this.switch = switchName;
-    //     this.interface = interface;
-    //   }
-    // }
-    // List<SwitchTable> list = new LinkedList<>();
     public class Node {
-      String switch;
+      DatapathId switchName;
       int interface;
       Node next;
 
       public Node(String switchItem, int interfaceItem) {
-        switch = switchItem;
+        switchName = switchItem;
         interface = interfaceItem;
       }
     }
-
-    public class LinkedList {
-      Node head;
-
-      public LinkedList(String switchItem, int interfaceItem) {
-        head = new Node(switchItem, interfaceItem);
-      }
-
-      public void add(String switchItem, int interfaceItem) {
-        temp = new Node(switchItem, interfaceItem);
-        temp.next = head.next;
-        head.next = temp;
-      }
-    }
-    static HashMap<String, LinkedList> map = new HashMap<>();
+    static HashMap<String, Node> map = new HashMap<>();
     /**
      * @param floodlightProvider the floodlightProvider to set
      */
@@ -88,10 +65,12 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
           boolean interfaceFound = false;
           DatapathId switchMac = sw.getId()
           int interface = packetin_msg.getInPort()
-          String src = eth.getSourceMACAddress();
+          String src = eth.getSourceMACAddress()/*.toString()*/;
+          Stirng dst = eth.getDestinationMACAddress()/*.toString()*/;
+          int dstInterface;
           if(map.containsKey(src)) {
-            LinkedList n = map.get(src);
-            LinkedList prev_n;
+            Node n = map.get(src);
+            Node prev_n;
             while(n != NULL) {
               if(n.switchName == switchMac) {
                 if(n.interface == NULL) {
@@ -106,8 +85,40 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             if(!interfaceFound)
             {
               Node temp = new Node(switchMac, interface);
+              temp.next = NULL;
+              prev_n.next = temp;
             }
           }
+          else {
+            Node n = new Node(switchMac, interface);
+            map.put(src, n);
+          }
+
+          interfaceFound = false;
+          if(map.containskey(dst)) {
+            Node n = map.get(dst);
+            Node prev_n;
+            while(n != NULL) {
+              if(n.switchName == switchMac) {
+                if(n.interface != NULL) {
+                  dstInterface = n.interface;
+                  interfaceFound = true;
+                  break;
+                }
+              }
+              prev_n = n;
+              n = n.next;
+            }
+            if(interfaceFound) {
+              //Tell switch to forward packet out this interface
+              //Install flow entry
+            }
+            else {
+              //tell switch to flood packet on every
+              //interface except source interface
+            }
+          }
+
         /*
         *
           # PROJ3 Your logic goes here
