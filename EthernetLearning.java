@@ -4,6 +4,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
+import java.util.HashMap;
+import java.util.*;
 
 import net.floodlightcontroller.core.FloodlightContext;
 import net.floodlightcontroller.core.IFloodlightProviderService;
@@ -34,7 +36,40 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     /*
         # PROJ3 Define your data structures here
     */
+    // class SwitchTable {
+    //   String switchName;
+    //   int interface;
+    //   public SwitchTable(String switchName, int interface) {
+    //     this.switch = switchName;
+    //     this.interface = interface;
+    //   }
+    // }
+    // List<SwitchTable> list = new LinkedList<>();
+    public class Node {
+      String switch;
+      int interface;
+      Node next;
 
+      public Node(String switchItem, int interfaceItem) {
+        switch = switchItem;
+        interface = interfaceItem;
+      }
+    }
+
+    public class LinkedList {
+      Node head;
+
+      public LinkedList(String switchItem, int interfaceItem) {
+        head = new Node(switchItem, interfaceItem);
+      }
+
+      public void add(String switchItem, int interfaceItem) {
+        temp = new Node(switchItem, interfaceItem);
+        temp.next = head.next;
+        head.next = temp;
+      }
+    }
+    static HashMap<String, LinkedList> map = new HashMap<>();
     /**
      * @param floodlightProvider the floodlightProvider to set
      */
@@ -50,6 +85,29 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
     	switch (msg.getType()) {
         case PACKET_IN:
+          boolean interfaceFound = false;
+          DatapathId switchMac = sw.getId()
+          int interface = packetin_msg.getInPort()
+          String src = eth.getSourceMACAddress();
+          if(map.containsKey(src)) {
+            LinkedList n = map.get(src);
+            LinkedList prev_n;
+            while(n != NULL) {
+              if(n.switchName == switchMac) {
+                if(n.interface == NULL) {
+                  n.interface = interface;
+                  interfaceFound = true;
+                  break;
+                }
+              }
+              prev_n = n;
+              n = n.next
+            }
+            if(!interfaceFound)
+            {
+              Node temp = new Node(switchMac, interface);
+            }
+          }
         /*
         *
           # PROJ3 Your logic goes here
