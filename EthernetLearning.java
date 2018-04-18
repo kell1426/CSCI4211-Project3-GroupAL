@@ -1,5 +1,6 @@
 package net.floodlightcontroller.EthernetLearning;
 
+import java.io.*;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -23,10 +24,16 @@ import org.projectfloodlight.openflow.protocol.OFPacketOut;
 import org.projectfloodlight.openflow.protocol.OFType;
 import org.projectfloodlight.openflow.protocol.OFVersion;
 import org.projectfloodlight.openflow.protocol.action.OFAction;
+import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
-import org.projectfloodlight.openflow.protocol.match.MatchField;
-import org.projectfloodlight.openflow.types.OFBufferId;
-import org.projectfloodlight.openflow.types.OFPort;
+import org.projectfloodlight.openflow.protocol.match.*;
+import org.projectfloodlight.openflow.types.*;
+import net.floodlightcontroller.packet.Ethernet;
+import org.projectfloodlight.openflow.util;
+
+
+
+
 
 
 public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
@@ -37,16 +44,16 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         # PROJ3 Define your data structures here
     */
     public class Node {
-      DatapathId switchName;
-      int interface;
+      String switchName;
+      OFPort port;
       Node next;
 
-      public Node(String switchItem, int interfaceItem) {
+      public Node(String switchItem, OFPort portItem) {
         switchName = switchItem;
-        interface = interfaceItem;
+        port = portItem;
       }
     }
-    static HashMap<MacAddress, Node> map = new HashMap<>();
+    static HashMap<String, Node> map = new HashMap<>();
     /**
      * @param floodlightProvider the floodlightProvider to set
      */
@@ -62,86 +69,106 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
     	switch (msg.getType()) {
         case PACKET_IN:
-          boolean interfaceFound = false;
-          DatapathId switchMac = sw.getId();
-          int interface = packetin_msg.getInPort();
+          Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
+          boolean portFound = false;
+          String switchMac = sw.getId().toString();
+          OFPacketIn packetin_msg = (OFPacketIn) msg;
+          OFPort port = packetin_msg.getInPort();
           MacAddress src = eth.getSourceMACAddress();
+          String srcString = src.toString();
           MacAddress dst = eth.getDestinationMACAddress();
-          int dstInterface;
-          if(map.containsKey(src)) {
-            Node n = map.get(src);
-            Node prev_n;
-            while(n != NULL) {
+          String dstString = dst.toString();
+          OFPort dstPort;
+          if(map.containsKey(srcString)) {
+            Node n = map.get(srcString);
+            Node prev_n = new Node(null, null);
+            while(n != null) {
               if(n.switchName == switchMac) {
-                if(n.interface == NULL) {
-                  n.interface = interface;
-                  interfaceFound = true;
+                if(n.port == null) {
+                  n.port = port;
+                  portFound = true;
                   break;
                 }
               }
               prev_n = n;
               n = n.next;
             }
-            if(!interfaceFound)
+            if(!portFound)
             {
-              Node temp = new Node(switchMac, interface);
-              temp.next = NULL;
+              Node temp = new Node(switchMac, port);
+              temp.next = null;
               prev_n.next = temp;
             }
           }
           else {
-            Node n = new Node(switchMac, interface);
-            map.put(src, n);
+            Node n = new Node(switchMac, port);
+            map.put(srcString, n);
           }
 
-          interfaceFound = false;
-          if(map.containskey(dst)) {
-            Node n = map.get(dst);
+          portFound = false;
+          if(map.containsKey(dstString)) {
+            Node n = map.get(dstString);
             Node prev_n;
-            while(n != NULL) {
+            while(n != null) {
               if(n.switchName == switchMac) {
-                if(n.interface != NULL) {
-                  dstInterface = n.interface;
-                  interfaceFound = true;
+                if(n.port != null) {
+                  dstPort = n.port;
+                  portFound = true;
                   break;
                 }
               }
               prev_n = n;
               n = n.next;
             }
-            if(interfaceFound) {
-              //Tell switch to forward packet out this interface
+            if(portFound) {
+              //Tell switch to forward packet out this port
               //Install flow entry
               // OFMatch match = new OFMatch();
               // match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_TYPE).matchOn(Flag.NW_DST).withNwDstMask(24));
               // match.setDataLayerType(Ethernet.TYPE_MacAddress);
-
-              Match.Builder match = sw.getOFFactory().buildMatch()
+              OFFactory myFactory = sw.getOFFactory();
+              Match match = myFactory.buildMatch()
               .setExact(MatchField.ETH_DST, dst)
               .build();
 
-              ArrayList<OFAction> actions = new ArrayList<OFAction>();
-              OFActionOutput action = new OFActionOutput().setPort((short) interface);
-              OFActionNetworkLayerSource ofanls = new OFActionNetworkLayerSource();
+              ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+              //OFActionOutput action = new OFActionOutput().setPort(port);
+              //OFActionNetworkLayerSource ofanls = new OFActionNetworkLayerSource();
+              OFActions actions = myFactory.actions();
+              OFActionOutput output = actions.buildOutput()
+              .setMaxLen(0xFFffFFff)
+              .setPort(port)
+              .build();
+              actionList.add(output);
+
+              // OFFlowMod flowMod = new OFFlowMod();
+              // flowMod.setMatch(match);
+              // flowMod.setActions(actions);
+              // flowMod.setLength(OFFlowMod.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH
+              //   + OFActionNetworkLayerSource.MINIMUM_LENGTH);
 
 
-              OFFlowMod flowMod = new OFFlowMod();
-              flowMod.setMatch(match);
-              flowMod.setActions(actions);
-              flowMod.setLength(OFFlowMod.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH
-                + OFActionNetworkLayerSource.MINIMUM_LENGTH);
+              OFFlowAdd flowAdd = myFactory.buildFlowAdd()
+                  .setBufferId(OFBufferId.NO_BUFFER)
+                  .setHardTimeout(3600)
+                  .setIdleTimeout(10)
+                  .setPriority(32768)
+                  .setMatch(match)
+                  .setActions(actionList)
+                  .setTableId(TableId.of(1))
+                  .build();
 
               try {
-                sw.write(flowMod, cntx);
-                sw.flush();
+                sw.write(flowAdd);
+                //sw.flush();
               } catch (IOException e){
-                log.error("Failure writing flowMod", e);
+                System.out.println("Failure writing flowMod");
               }
             }
           }
           else {
             //tell switch to flood packet on every
-            //interface except source interface
+            //port except source port
             Ethernet l2 = new Ethernet();
             l2.setSourceMACAddress(src);
             l2.setDestinationMACAddress(MacAddress.BROADCAST);
@@ -150,7 +177,8 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
             OFPacketOut po = sw.getOFFactory().buildPacketOut()
             .setData(serializedData)
-            .setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(OFPort.FLOOD, 0xffFFffFF)))
+            .setActions(Collections.singletonList((OFAction) sw.getOFFactory()
+              .actions().output(OFPort.FLOOD, 0xffFFffFF)))
             .setInPort(OFPort.CONTROLLER)
             .build();
             sw.write(po);
