@@ -29,7 +29,11 @@ import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
 import org.projectfloodlight.openflow.protocol.match.*;
 import org.projectfloodlight.openflow.types.*;
 import net.floodlightcontroller.packet.Ethernet;
-import org.projectfloodlight.openflow.util;
+import org.projectfloodlight.openflow.util.*;
+import org.projectfloodlight.openflow.protocol.OFFactory;
+import org.projectfloodlight.openflow.protocol.OFFlowMod;
+
+
 
 
 
@@ -158,12 +162,14 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                   .setTableId(TableId.of(1))
                   .build();
 
-              try {
-                sw.write(flowAdd);
-                //sw.flush();
-              } catch (IOException e){
-                System.out.println("Failure writing flowMod");
-              }
+              sw.write(flowAdd);
+
+              // try {
+              //   sw.write(flowAdd);
+              //   //sw.flush();
+              // } catch (IOException e){
+              //   System.out.println("Failure writing flowMod");
+              // }
             }
           }
           else {
