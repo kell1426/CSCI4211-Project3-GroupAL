@@ -163,13 +163,13 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                   .build();
 
               sw.write(flowAdd);
-
-              // try {
-              //   sw.write(flowAdd);
-              //   //sw.flush();
-              // } catch (IOException e){
-              //   System.out.println("Failure writing flowMod");
-              // }
+              // File log = new File("log.txt");
+              // FileWriter writer;
+              // writer = new FileWriter(log, true);
+              // PrintWriter printer = new PrintWriter(writer);
+              // printer.appened("Added flow mod\n");
+              // printer.close();
+              System.out.println("Installed Flow Entry");
             }
           }
           else {
@@ -188,6 +188,13 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             .setInPort(OFPort.CONTROLLER)
             .build();
             sw.write(po);
+            // File log = new File("log.txt");
+            // FileWriter writer;
+            // writer = new FileWriter(log, true);
+            // PrintWriter printer = new PrintWriter(writer);
+            // printer.appened("Flooded packet\n");
+            // printer.close();
+            System.out.println("Flooded packet");
           }
           break;
 
