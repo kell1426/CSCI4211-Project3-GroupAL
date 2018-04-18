@@ -63,8 +63,8 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     	switch (msg.getType()) {
         case PACKET_IN:
           boolean interfaceFound = false;
-          DatapathId switchMac = sw.getId()
-          int interface = packetin_msg.getInPort()
+          DatapathId switchMac = sw.getId();
+          int interface = packetin_msg.getInPort();
           MacAddress src = eth.getSourceMACAddress();
           MacAddress dst = eth.getDestinationMACAddress();
           int dstInterface;
@@ -80,7 +80,7 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                 }
               }
               prev_n = n;
-              n = n.next
+              n = n.next;
             }
             if(!interfaceFound)
             {
@@ -116,15 +116,14 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
               // match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_TYPE).matchOn(Flag.NW_DST).withNwDstMask(24));
               // match.setDataLayerType(Ethernet.TYPE_MacAddress);
 
-              Match.Builder match = sw.getOFFactory().buildMatch();
-              // match.setExact(MatchField.IN_PORT, interface);
-              match.setExact(MatchField.ETH_DST, dst);
-              match.build();
+              Match.Builder match = sw.getOFFactory().buildMatch()
+              .setExact(MatchField.ETH_DST, dst)
+              .build();
 
               ArrayList<OFAction> actions = new ArrayList<OFAction>();
               OFActionOutput action = new OFActionOutput().setPort((short) interface);
               OFActionNetworkLayerSource ofanls = new OFActionNetworkLayerSource();
-              
+
 
               OFFlowMod flowMod = new OFFlowMod();
               flowMod.setMatch(match);
