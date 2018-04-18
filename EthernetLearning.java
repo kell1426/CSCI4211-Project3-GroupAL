@@ -112,16 +112,51 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             if(interfaceFound) {
               //Tell switch to forward packet out this interface
               //Install flow entry
-              OFMatch match = new OFMatch();
-              match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_TYPE).matchOn(Flag.NW_DST).withNwDstMask(24));
-              match.setDataLayerType(Ethernet.TYPE_MacAddress);
-            }
-            else {
-              //tell switch to flood packet on every
-              //interface except source interface
+              // OFMatch match = new OFMatch();
+              // match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_TYPE).matchOn(Flag.NW_DST).withNwDstMask(24));
+              // match.setDataLayerType(Ethernet.TYPE_MacAddress);
 
+              Match.Builder match = sw.getOFFactory().buildMatch();
+              // match.setExact(MatchField.IN_PORT, interface);
+              match.setExact(MatchField.ETH_DST, dst);
+              match.build();
+
+              ArrayList<OFAction> actions = new ArrayList<OFAction>();
+              OFActionOutput action = new OFActionOutput().setPort((short) interface);
+              OFActionNetworkLayerSource ofanls = new OFActionNetworkLayerSource();
+              
+
+              OFFlowMod flowMod = new OFFlowMod();
+              flowMod.setMatch(match);
+              flowMod.setActions(actions);
+              flowMod.setLength(OFFlowMod.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH
+                + OFActionNetworkLayerSource.MINIMUM_LENGTH);
+
+              try {
+                sw.write(flowMod, cntx);
+                sw.flush();
+              } catch (IOException e){
+                log.error("Failure writing flowMod", e);
+              }
             }
           }
+          else {
+            //tell switch to flood packet on every
+            //interface except source interface
+            Ethernet l2 = new Ethernet();
+            l2.setSourceMACAddress(src);
+            l2.setDestinationMACAddress(MacAddress.BROADCAST);
+
+            byte[] serializedData = l2.serialize();
+
+            OFPacketOut po = sw.getOFFactory().buildPacketOut()
+            .setData(serializedData)
+            .setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(OFPort.FLOOD, 0xffFFffFF)))
+            .setInPort(OFPort.CONTROLLER)
+            .build();
+            sw.write(po);
+          }
+          break;
 
         /*
         *
