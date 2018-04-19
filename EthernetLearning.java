@@ -163,15 +163,15 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                   .build();
 
               sw.write(flowAdd);
-              try{
-                File logFile = new File("/home/log.txt");
-                BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true));
-                writer.append("Installed Flow Entry\n");
-                writer.close();
-              }
-              catch (IOException e){
-                System.out.println("Error writing to file.");
-              }
+              // try{
+              //   File logFile = new File("/home/log.txt");
+              //   BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true));
+              //   writer.append("Installed Flow Entry\n");
+              //   writer.close();
+              // }
+              // catch (IOException e){
+              //   System.out.println("Error writing to file.");
+              // }
               //System.out.println("Installed Flow Entry");
             }
           }
@@ -191,16 +191,16 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             .setInPort(OFPort.CONTROLLER)
             .build();
             sw.write(po);
-
-            try{
-              File logFile = new File("/home/log.txt");
-              BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true));
-              writer.append("Flooded packet\n");
-              writer.close();
-            }
-            catch (IOException e){
-              System.out.println("Error writing to file.");
-            }
+            //
+            // try{
+            //   File logFile = new File("/home/log.txt");
+            //   BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true));
+            //   writer.append("Flooded packet\n");
+            //   writer.close();
+            // }
+            // catch (IOException e){
+            //   System.out.println("Error writing to file.");
+            // }
             //System.out.println("Flooded packet");
           }
           break;
