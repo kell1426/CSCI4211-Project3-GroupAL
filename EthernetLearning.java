@@ -163,13 +163,16 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                   .build();
 
               sw.write(flowAdd);
-              // File log = new File("log.txt");
-              // FileWriter writer;
-              // writer = new FileWriter(log, true);
-              // PrintWriter printer = new PrintWriter(writer);
-              // printer.appened("Added flow mod\n");
-              // printer.close();
-              System.out.println("Installed Flow Entry");
+              try{
+                File logFile = new File("/home/log.txt");
+                BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true));
+                writer.append("Installed Flow Entry\n");
+                writer.close();
+              }
+              catch (IOException e){
+                System.out.println("Error writing to file.");
+              }
+              //System.out.println("Installed Flow Entry");
             }
           }
           else {
@@ -188,13 +191,17 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             .setInPort(OFPort.CONTROLLER)
             .build();
             sw.write(po);
-            // File log = new File("log.txt");
-            // FileWriter writer;
-            // writer = new FileWriter(log, true);
-            // PrintWriter printer = new PrintWriter(writer);
-            // printer.appened("Flooded packet\n");
-            // printer.close();
-            System.out.println("Flooded packet");
+
+            try{
+              File logFile = new File("/home/log.txt");
+              BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true));
+              writer.append("Flooded packet\n");
+              writer.close();
+            }
+            catch (IOException e){
+              System.out.println("Error writing to file.");
+            }
+            //System.out.println("Flooded packet");
           }
           break;
 
