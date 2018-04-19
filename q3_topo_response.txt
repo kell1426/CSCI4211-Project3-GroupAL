@@ -1,0 +1,39 @@
+It is possible to estimate the latency and throughput of each of the 4 links.
+This can be done by using the ping command and finding the delay for the packet
+to reach the destination. This time will be the time it takes to move from the
+host to the switch, the switch to another switch, and the switch to another host.
+
+Using the command "h1 ping h2", we can find the time it takes to travel along
+the link from one host to it's switch. The delay from h1 to h2 is 0.02 ms. This
+delay is the delay from h1 to s1 and s1 to h2. So the total delay for a link
+from a host to its switch is 0.01 ms. So, the delays from a host to its own switch
+is negligible.
+
+L1's latency can be found by pinging h1 to h3. This delay is 80 ms.
+L2's latency can be found by pinging h3 to h4. This delay is 20 ms.
+L3's latency can be found by pinging h4 to h5. This delay is 40 ms.
+L4's latency can be found by pinging h4 to h7. This delay is 60 ms.
+
+The ping command send the packet to the desination, and then the destination
+responds back to the source host of the ping command. So the latency is half of
+the above delays. So:
+L1's Latency = 40 ms.
+L2's latency = 10 ms.
+L3's latency = 20 ms.
+L4's latency = 30 ms.
+
+The iperf command gives the bandwidth between hosts, so the bandwidth of the links
+can be found by testing the bandwidth of hosts on either side of a link.
+
+mininet> iperf h1 h3
+*** Iperf: testing TCP bandwidth between h1 and h3
+*** Results: ['18.5 Mbits/sec', '23.4 Mbits/sec']
+mininet> iperf h3 h4
+*** Iperf: testing TCP bandwidth between h3 and h4
+*** Results: ['37.6 Mbits/sec', '45.4 Mbits/sec']
+mininet> iperf h4 h5
+*** Iperf: testing TCP bandwidth between h4 and h5
+*** Results: ['28.2 Mbits/sec', '34.5 Mbits/sec']
+mininet> iperf h4 h7
+*** Iperf: testing TCP bandwidth between h4 and h7
+*** Results: ['18.7 Mbits/sec', '23.1 Mbits/sec']
