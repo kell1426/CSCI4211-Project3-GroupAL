@@ -1,3 +1,8 @@
+# proj3_topo.py
+# Daniel Kelly and Noah Bolduan
+# 4/20/18
+# CSCI 4211 Project 3
+
 from mininet.cli import CLI
 from mininet.net import Mininet
 from mininet.link import TCLink
@@ -36,9 +41,9 @@ class AssignmentNetworks(Topo):
         self.addLink(s2, s3, bw=40, delay='10ms')
         self.addLink(s3, s4, bw=30, delay='20ms')
         self.addLink(s3, s5, bw=20, delay='30ms')
-        
- 
-        
+
+
+
 if __name__ == '__main__':
     setLogLevel( 'info' )
 
@@ -51,4 +56,3 @@ if __name__ == '__main__':
     net.start()
     CLI( net )
     net.stop()
-

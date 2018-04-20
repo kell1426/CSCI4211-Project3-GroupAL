@@ -1,3 +1,8 @@
+// EthernetLearning.java
+// Daniel Kelly and Noah Bolduan
+// 4/20/18
+// CSCI 4211 Project 3
+
 package net.floodlightcontroller.EthernetLearning;
 
 import java.io.*;
@@ -122,7 +127,7 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
           /*If the map has an entry for the destination MAC address,
           scan the linked list for an entry for the current switch.
           If an entry is found, tell the switch to use that port and
-          to install a flow entry. If there is no entry for the 
+          to install a flow entry. If there is no entry for the
           switch, tell the switch to send a flood message. */
           if(map.containsKey(dstString)) {
             Node n = map.get(dstString);

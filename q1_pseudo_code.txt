@@ -1,3 +1,8 @@
+q1_pseudo_code.txt
+Daniel Kelly and Noah Bolduan
+4/20/18
+CSCI 4211 Project 3
+
 The code creates a hashmap, where the key is the destination
 MAC address and the value is a linked list. The linked list
 contains a mapping of the MAC address to a port for each switch.

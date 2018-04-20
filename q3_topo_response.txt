@@ -1,3 +1,8 @@
+q3_topo_response.txt
+Daniel Kelly and Noah Bolduan
+4/20/18
+CSCI 4211 Project 3
+
 It is possible to estimate the latency and throughput of each of the 4 links.
 This can be done by using the ping command and finding the delay for the packet
 to reach the destination. This time will be the time it takes to move from the

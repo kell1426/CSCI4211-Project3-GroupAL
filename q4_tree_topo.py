@@ -1,3 +1,8 @@
+# q4_tree_topo.py
+# Daniel Kelly and Noah Bolduan
+# 4/20/18
+# CSCI 4211 Project 3
+
 #!/usr/bin/env python
 
 from mininet.cli import CLI
