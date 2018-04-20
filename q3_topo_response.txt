@@ -25,15 +25,7 @@ L4's latency = 30 ms.
 The iperf command gives the bandwidth between hosts, so the bandwidth of the links
 can be found by testing the bandwidth of hosts on either side of a link.
 
-mininet> iperf h1 h3
-*** Iperf: testing TCP bandwidth between h1 and h3
-*** Results: ['18.5 Mbits/sec', '23.4 Mbits/sec']
-mininet> iperf h3 h4
-*** Iperf: testing TCP bandwidth between h3 and h4
-*** Results: ['37.6 Mbits/sec', '45.4 Mbits/sec']
-mininet> iperf h4 h5
-*** Iperf: testing TCP bandwidth between h4 and h5
-*** Results: ['28.2 Mbits/sec', '34.5 Mbits/sec']
-mininet> iperf h4 h7
-*** Iperf: testing TCP bandwidth between h4 and h7
-*** Results: ['18.7 Mbits/sec', '23.1 Mbits/sec']
+L1's bandwidth = 20 Mbits/sec
+L2's bandwidth = 40 Mbits/sec
+L3's bandwidth = 30 Mbits/sec
+L4's bandwidth = 20 Mbits/sec

@@ -1,3 +1,7 @@
+The code creates a hashmap, where the key is the destination
+MAC address and the value is a linked list. The linked list
+contains a mapping of the MAC address to a port for each switch.
+
 hashmap map
 while 1
   receive OFPacketIn

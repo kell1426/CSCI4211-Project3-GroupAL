@@ -47,6 +47,8 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     /*
         # PROJ3 Define your data structures here
     */
+    //Linked list node. The linked list maps port numbers
+    //to each switch.
     public class Node {
       String switchName;
       OFPort port;
@@ -57,6 +59,8 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         port = portItem;
       }
     }
+    //A hashmap that maps destination MAC addresses to a
+    //linked list of switch/port pairings.
     static HashMap<String, Node> map = new HashMap<>();
     /**
      * @param floodlightProvider the floodlightProvider to set
@@ -83,6 +87,12 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
           MacAddress dst = eth.getDestinationMACAddress();
           String dstString = dst.toString();
           OFPort dstPort;
+          /*If the map has an entry for the source MAC address,
+          scan the linked list for a node for the current switch.
+          If a match is found, use that port. If not, add a node to
+          map the MAC address to a port.
+          If the map does not have an entry for the source MAC
+          address, create a linked list node and add it to the map.*/
           if(map.containsKey(srcString)) {
             Node n = map.get(srcString);
             Node prev_n = new Node(null, null);
@@ -97,8 +107,7 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
               prev_n = n;
               n = n.next;
             }
-            if(!portFound)
-            {
+            if(!portFound){
               Node temp = new Node(switchMac, port);
               temp.next = null;
               prev_n.next = temp;
@@ -110,6 +119,11 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
           }
 
           portFound = false;
+          /*If the map has an entry for the destination MAC address,
+          scan the linked list for an entry for the current switch.
+          If an entry is found, tell the switch to use that port and
+          to install a flow entry. If there is no entry for the 
+          switch, tell the switch to send a flood message. */
           if(map.containsKey(dstString)) {
             Node n = map.get(dstString);
             Node prev_n;
@@ -127,30 +141,18 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             if(portFound) {
               //Tell switch to forward packet out this port
               //Install flow entry
-              // OFMatch match = new OFMatch();
-              // match.setWildcards(Wildcards.FULL.matchOn(Flag.DL_TYPE).matchOn(Flag.NW_DST).withNwDstMask(24));
-              // match.setDataLayerType(Ethernet.TYPE_MacAddress);
               OFFactory myFactory = sw.getOFFactory();
               Match match = myFactory.buildMatch()
               .setExact(MatchField.ETH_DST, dst)
               .build();
 
               ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-              //OFActionOutput action = new OFActionOutput().setPort(port);
-              //OFActionNetworkLayerSource ofanls = new OFActionNetworkLayerSource();
               OFActions actions = myFactory.actions();
               OFActionOutput output = actions.buildOutput()
               .setMaxLen(0xFFffFFff)
               .setPort(port)
               .build();
               actionList.add(output);
-
-              // OFFlowMod flowMod = new OFFlowMod();
-              // flowMod.setMatch(match);
-              // flowMod.setActions(actions);
-              // flowMod.setLength(OFFlowMod.MINIMUM_LENGTH + OFActionOutput.MINIMUM_LENGTH
-              //   + OFActionNetworkLayerSource.MINIMUM_LENGTH);
-
 
               OFFlowAdd flowAdd = myFactory.buildFlowAdd()
                   .setBufferId(OFBufferId.NO_BUFFER)
@@ -163,16 +165,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                   .build();
 
               sw.write(flowAdd);
-              // try{
-              //   File logFile = new File("/home/log.txt");
-              //   BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true));
-              //   writer.append("Installed Flow Entry\n");
-              //   writer.close();
-              // }
-              // catch (IOException e){
-              //   System.out.println("Error writing to file.");
-              // }
-              //System.out.println("Installed Flow Entry");
             }
           }
           else {
@@ -191,17 +183,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             .setInPort(OFPort.CONTROLLER)
             .build();
             sw.write(po);
-            //
-            // try{
-            //   File logFile = new File("/home/log.txt");
-            //   BufferedWriter writer = new BufferedWriter(new FileWriter(logFile, true));
-            //   writer.append("Flooded packet\n");
-            //   writer.close();
-            // }
-            // catch (IOException e){
-            //   System.out.println("Error writing to file.");
-            // }
-            //System.out.println("Flooded packet");
           }
           break;
 
