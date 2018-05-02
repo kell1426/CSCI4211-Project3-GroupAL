@@ -71,6 +71,34 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     ARPmap.put(ip5, mac5);
     ARPmap.put(ip6, mac6);
 
+
+    //Need to install ARP requests into switches.
+    //Go straight from switch to controller.
+    OFFactory myFactory = sw.getOFFactory();
+    Match match = myFactory.buildMatch()
+    .setExact(MatchField.ETH_TYPE, EthType.of(0x806))
+    .build();
+
+    ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+    OFActions actions = myFactory.actions();
+    OFActionOutput output = actions.buildOutput()
+    .setMaxLen(0xFFffFFff)
+    .setPort(OFPort.CONTROLLER);
+    .build();
+    actionList.add(output);
+
+    OFFlowAdd flowAdd = myFactory.buildFlowAdd()
+        .setBufferId(OFBufferId.NO_BUFFER)
+        .setHardTimeout(3600)
+        .setIdleTimeout(10)
+        .setPriority(32768)
+        .setMatch(match)
+        .setActions(actionList)
+        .setTableId(TableId.of(1))
+        .build();
+
+    sw.write(flowAdd);
+
     /*
     h1: l1 port 3
     h2: l1 port 4
@@ -98,33 +126,43 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             OFPacketIn packetin_msg = (OFPacketIn) msg;
             OFPort port = packetin_msg.getInPort();
             IPv4 ipv4 = eth.getPayload();
+            IPv4Address srcIP = ipv4.getSourceAddress();
             IPv4Address dstIP = ipv4.getDestinationAddress();
+            MacAddress srcMac = eth.getSourceMACAddress();
             MacAddress dstMac = ARPmap.get(dstIP);
 
-            OFFactory myFactory = sw.getOFFactory();
-            Match match = myFactory.buildMatch()
-            .setExact(MatchField.ETH_TYPE, EthType.of(0x806))
+            Ethernet l2 = new Ethernet();
+            l2.setSourceMACAddress(srcMac);
+            l2.setDestinationMACAddress(dstMac);
+            l2.setEtherType(EthType.ARP);
+
+            IPv4 l3 = new IPv4();
+            l3.setSourceAddress(srcIP);
+            l3.setDestinationAddress(dstIP);
+            l3.setTtl((byte) 64);
+            l3.setProtocol(IpProtocol.UDP);
+
+            UDP l4 = new UDP();
+            l4.setSourcePort(TransportPort.of(65003));
+            l4.setDestinationPort(TransportPort.of(67));
+
+            Data l7 = new Data();
+            l7.setData(new byte[1000]);
+
+            l2.setPayload(l3);
+            l3.setPayload(l4);
+            l4.setPayload(l7);
+
+
+            byte[] serializedData = l2.serialize();
+
+            OFPacketOut po = sw.getOFFactory().buildPacketOut() /* mySwitch is some IOFSwitch object */
+            .setData(serializedData)
+            .setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(port, 0xffFFffFF)))
+            .setInPort(OFPort.CONTROLLER)
             .build();
 
-            ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-            OFActions actions = myFactory.actions();
-            OFActionOutput output = actions.buildOutput()
-            .setMaxLen(0xFFffFFff)
-            .setPort(OFPort.CONTROLLER);
-            .build();
-            actionList.add(output);
-
-            OFFlowAdd flowAdd = myFactory.buildFlowAdd()
-                .setBufferId(OFBufferId.NO_BUFFER)
-                .setHardTimeout(3600)
-                .setIdleTimeout(10)
-                .setPriority(32768)
-                .setMatch(match)
-                .setActions(actionList)
-                .setTableId(TableId.of(1))
-                .build();
-
-            sw.write(flowAdd);
+            sw.write(po);
           }
           // MacAddress src = eth.getSourceMACAddress();
           // String srcString = src.toString();
@@ -178,11 +216,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
           // }
           break;
 
-        /*
-        *
-          # PROJ3 Your logic goes here
-        *
-        */
         default:
             break;
         }
@@ -236,6 +269,108 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     public void startUp(FloodlightModuleContext context) {
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
     }
+
+    // @Override
+    // public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
+    //     for (LDUpdate u : updateList) {
+    //         /* Remove flows on either side if link/port went down */
+    //         if (u.getOperation() == UpdateOperation.LINK_REMOVED ||
+    //                 u.getOperation() == UpdateOperation.PORT_DOWN ||
+    //                 u.getOperation() == UpdateOperation.TUNNEL_PORT_REMOVED) {
+    //             Set<OFMessage> msgs = new HashSet<OFMessage>();
+    //
+    //             if (u.getSrc() != null && !u.getSrc().equals(DatapathId.NONE)) {
+    //                 IOFSwitch srcSw = switchService.getSwitch(u.getSrc());
+    //                 /* src side of link */
+    //                 if (srcSw != null) {
+    //                     Set<U64> ids = flowSetIdRegistry.getFlowSetIds(
+    //                             new NodePortTuple(u.getSrc(), u.getSrcPort()));
+    //                     if (ids != null) {
+    //                         Iterator<U64> i = ids.iterator();
+    //                         while (i.hasNext()) {
+    //                             U64 id = i.next();
+    //                             U64 cookie = id.or(DEFAULT_FORWARDING_COOKIE);
+    //                             U64 cookieMask = U64.of(FLOWSET_MASK).or(AppCookie.getAppFieldMask());
+    //
+    //                             /* Delete flows matching on src port and outputting to src port */
+    //                             msgs = buildDeleteFlows(u.getSrcPort(), msgs, srcSw, cookie, cookieMask);
+    //                             messageDamper.write(srcSw, msgs);
+    //                             log.debug("src: Removing flows to/from DPID={}, port={}", u.getSrc(), u.getSrcPort());
+    //                             log.debug("src: Cookie/mask {}/{}", cookie, cookieMask);
+    //
+    //                             /*
+    //                              * Now, for each ID on this particular failed link, remove
+    //                              * all other flows in the network using this ID.
+    //                              */
+    //                             Set<NodePortTuple> npts = flowSetIdRegistry.getNodePortTuples(id);
+    //                             if (npts != null) {
+    //                                 for (NodePortTuple npt : npts) {
+    //                                     msgs.clear();
+    //                                     IOFSwitch sw = switchService.getSwitch(npt.getNodeId());
+    //                                     if (sw != null) {
+    //
+    //                                         /* Delete flows matching on npt port and outputting to npt port*/
+    //                                         msgs = buildDeleteFlows(npt.getPortId(), msgs, sw, cookie, cookieMask);
+    //                                         messageDamper.write(sw, msgs);
+    //                                         log.debug("src: Removing same-cookie flows to/from DPID={}, port={}", npt.getNodeId(), npt.getPortId());
+    //                                         log.debug("src: Cookie/mask {}/{}", cookie, cookieMask);
+    //                                     }
+    //                                 }
+    //                             }
+    //                             flowSetIdRegistry.removeExpiredFlowSetId(id, new NodePortTuple(u.getSrc(), u.getSrcPort()), i);
+    //                         }
+    //                     }
+    //                 }
+    //                 flowSetIdRegistry.removeNodePortTuple(new NodePortTuple(u.getSrc(), u.getSrcPort()));
+    //             }
+    //
+    //             /* must be a link, not just a port down, if we have a dst switch */
+    //             if (u.getDst() != null && !u.getDst().equals(DatapathId.NONE)) {
+    //                 /* dst side of link */
+    //                 IOFSwitch dstSw = switchService.getSwitch(u.getDst());
+    //                 if (dstSw != null) {
+    //                     Set<U64> ids = flowSetIdRegistry.getFlowSetIds(
+    //                             new NodePortTuple(u.getDst(), u.getDstPort()));
+    //                     if (ids != null) {
+    //                         Iterator<U64> i = ids.iterator();
+    //                         while (i.hasNext()) {
+    //                             U64 id = i.next();
+    //                             U64 cookie = id.or(DEFAULT_FORWARDING_COOKIE);
+    //                             U64 cookieMask = U64.of(FLOWSET_MASK).or(AppCookie.getAppFieldMask());
+    //                             /* Delete flows matching on dst port and outputting to dst port */
+    //                             msgs = buildDeleteFlows(u.getDstPort(), msgs, dstSw, cookie, cookieMask);
+    //                             messageDamper.write(dstSw, msgs);
+    //                             log.debug("dst: Removing flows to/from DPID={}, port={}", u.getDst(), u.getDstPort());
+    //                             log.debug("dst: Cookie/mask {}/{}", cookie, cookieMask);
+    //
+    //                             /*
+    //                              * Now, for each ID on this particular failed link, remove
+    //                              * all other flows in the network using this ID.
+    //                              */
+    //                             Set<NodePortTuple> npts = flowSetIdRegistry.getNodePortTuples(id);
+    //                             if (npts != null) {
+    //                                 for (NodePortTuple npt : npts) {
+    //                                     msgs.clear();
+    //                                     IOFSwitch sw = switchService.getSwitch(npt.getNodeId());
+    //                                     if (sw != null) {
+    //                                         /* Delete flows matching on npt port and outputting on npt port */
+    //                                         msgs = buildDeleteFlows(npt.getPortId(), msgs, sw, cookie, cookieMask);
+    //                                         messageDamper.write(sw, msgs);
+    //                                         log.debug("dst: Removing same-cookie flows to/from DPID={}, port={}", npt.getNodeId(), npt.getPortId());
+    //                                         log.debug("dst: Cookie/mask {}/{}", cookie, cookieMask);
+    //                                     }
+    //                                 }
+    //                             }
+    //                             flowSetIdRegistry.removeExpiredFlowSetId(id, new NodePortTuple(u.getDst(), u.getDstPort()), i);
+    //                         }
+    //                     }
+    //                 }
+    //                 flowSetIdRegistry.removeNodePortTuple(new NodePortTuple(u.getDst(), u.getDstPort()));
+    //             }
+    //         }
+    //     }
+    // }
+
 }
 
 
