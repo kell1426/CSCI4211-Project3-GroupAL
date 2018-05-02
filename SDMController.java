@@ -40,64 +40,59 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     /*
         # PROJ3 Define your data structures here
     */
-    public class Node {
-      String switchName;
-      OFPort port;
-      Node next;
+    static public HashMap<IPv4Address, MacAddress> ARPmap = new HashMap<>();
 
-      public Node(String switchItem, OFPort portItem) {
-        switchName = switchItem;
-        port = portItem;
-      }
+    public void ARPinitilaizer(HashMap<IPv4Address, MacAddress> ARPmap) {
+      IPv4Address ip1 = IPv4Addres.of("10.0.0.1");
+      MacAddress mac1 = MacAddress.of("00:00:00:00:00:01");
+      IPv4Address ip2 = IPv4Addres.of("10.0.0.2");
+      MacAddress mac2 = MacAddress.of("00:00:00:00:00:02");
+      IPv4Address ip3 = IPv4Addres.of("10.0.0.3");
+      MacAddress mac3 = MacAddress.of("00:00:00:00:00:03");
+      IPv4Address ip4 = IPv4Addres.of("10.0.0.4");
+      MacAddress mac4 = MacAddress.of("00:00:00:00:00:04");
+      IPv4Address ip5 = IPv4Addres.of("10.0.0.5");
+      MacAddress mac5 = MacAddress.of("00:00:00:00:00:05");
+      IPv4Address ip6 = IPv4Addres.of("10.0.0.6");
+      MacAddress mac6 = MacAddress.of("00:00:00:00:00:06");
+      ARPmap.put(ip1, mac1);
+      ARPmap.put(ip2, mac2);
+      ARPmap.put(ip3, mac3);
+      ARPmap.put(ip4, mac4);
+      ARPmap.put(ip5, mac5);
+      ARPmap.put(ip6, mac6);
     }
-    static HashMap<String, Node> map = new HashMap<>();
-    static HashMap<IPv4Address, MacAddress> ARPmap = new HashMap<>();
-    IPv4Address ip1 = IPv4Addres.of("10.0.0.1");
-    MacAddress mac1 = MacAddress.of("00:00:00:00:00:01");
-    IPv4Address ip2 = IPv4Addres.of("10.0.0.2");
-    MacAddress mac2 = MacAddress.of("00:00:00:00:00:02");
-    IPv4Address ip3 = IPv4Addres.of("10.0.0.3");
-    MacAddress mac3 = MacAddress.of("00:00:00:00:00:03");
-    IPv4Address ip4 = IPv4Addres.of("10.0.0.4");
-    MacAddress mac4 = MacAddress.of("00:00:00:00:00:04");
-    IPv4Address ip5 = IPv4Addres.of("10.0.0.5");
-    MacAddress mac5 = MacAddress.of("00:00:00:00:00:05");
-    IPv4Address ip6 = IPv4Addres.of("10.0.0.6");
-    MacAddress mac6 = MacAddress.of("00:00:00:00:00:06");
-    ARPmap.put(ip1, mac1);
-    ARPmap.put(ip2, mac2);
-    ARPmap.put(ip3, mac3);
-    ARPmap.put(ip4, mac4);
-    ARPmap.put(ip5, mac5);
-    ARPmap.put(ip6, mac6);
 
+    public void FlowTableInitilizer()
+    {
+      OFFactory myFactory = sw.getOFFactory();
+      Match match = myFactory.buildMatch()
+      .setExact(MatchField.ETH_TYPE, EthType.of(0x806))
+      .build();
 
+      ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+      OFActions actions = myFactory.actions();
+      OFActionOutput output = actions.buildOutput()
+      .setMaxLen(0xFFffFFff)
+      .setPort(OFPort.CONTROLLER);
+      .build();
+      actionList.add(output);
+
+      OFFlowAdd flowAdd = myFactory.buildFlowAdd()
+          .setBufferId(OFBufferId.NO_BUFFER)
+          .setHardTimeout(3600)
+          .setIdleTimeout(10)
+          .setPriority(32768)
+          .setMatch(match)
+          .setActions(actionList)
+          .setTableId(TableId.of(1))
+          .build();
+
+      sw.write(flowAdd);
+    }
     //Need to install ARP requests into switches.
     //Go straight from switch to controller.
-    OFFactory myFactory = sw.getOFFactory();
-    Match match = myFactory.buildMatch()
-    .setExact(MatchField.ETH_TYPE, EthType.of(0x806))
-    .build();
 
-    ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-    OFActions actions = myFactory.actions();
-    OFActionOutput output = actions.buildOutput()
-    .setMaxLen(0xFFffFFff)
-    .setPort(OFPort.CONTROLLER);
-    .build();
-    actionList.add(output);
-
-    OFFlowAdd flowAdd = myFactory.buildFlowAdd()
-        .setBufferId(OFBufferId.NO_BUFFER)
-        .setHardTimeout(3600)
-        .setIdleTimeout(10)
-        .setPriority(32768)
-        .setMatch(match)
-        .setActions(actionList)
-        .setTableId(TableId.of(1))
-        .build();
-
-    sw.write(flowAdd);
 
     /*
     h1: l1 port 3
