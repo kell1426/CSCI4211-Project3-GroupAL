@@ -142,96 +142,111 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
             .build();
 
         sw.write(flowAdd);
-    }
-    //Flow entries from leaves to spines
-    for(int i = 0; i < 6; i++){
-      int switchnum;
-      if(i < 2){
-        switchnum = 0;
       }
-      else if(i < 4){
-        switchnum = 1;
+      //Flow entries from leaves to spines
+      for(int i = 0; i < 6; i++){
+        int switchnum;
+        if(i < 2){
+          switchnum = 0;
+        }
+        else if(i < 4){
+          switchnum = 1;
+        }
+        else if (i < 6){
+          switchnum = 2;
+        }
+        MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
+                                "00:00:00:00:00:03", "00:00:00:00:00:04",
+                                "00:00:00:00:00:05", "00:00:00:00:00:06"};
+        IOFSwitch sw =this.floodlightProvider.getSwitch(switches[(switchnum)]);
+        OFFactory myFactory = sw.getOFFactory();
+        Match match = myFactory.buildMatch()
+        .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i]))
+        .build();
+
+        ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+        OFActions actions = myFactory.actions();
+        OFActionOutput output = actions.buildOutput()
+        .setMaxLen(0xFFffFFff)
+        .setPort(OFPort.of((i % 2) + 1));
+        .build();
+        actionList.add(output);
+
+        OFFlowAdd flowAdd = myFactory.buildFlowAdd()
+            .setBufferId(OFBufferId.NO_BUFFER)
+            //.setHardTimeout(3600)
+            //.setIdleTimeout(10)
+            .setPriority(10000)
+            .setMatch(match)
+            .setActions(actionList)
+            .setTableId(TableId.of(1))
+            .build();
+
+        sw.write(flowAdd);
       }
-      else if (i < 6){
-        switchnum = 2;
+      for(int i = 0; i < 6; i++){
+        int switchnum;
+        if(i < 3){
+          switchnum = 3;
+        }
+        else if(i < 6){
+          switchnum = 4;
+        }
+        MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:03",
+                                "00:00:00:00:00:05", "00:00:00:00:00:02",
+                                "00:00:00:00:00:04", "00:00:00:00:00:06"};
+        IOFSwitch sw =this.floodlightProvider.getSwitch(switches[switchnum]);
+        OFFactory myFactory = sw.getOFFactory();
+        Match match = myFactory.buildMatch()
+        .setExact(MatchField.ETH_DST, EthType.of(MacAddress.of(MacAddr[i])) //ARP Type in Hex
+        .build();
+
+        ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+        OFActions actions = myFactory.actions();
+        OFActionOutput output = actions.buildOutput()
+        .setMaxLen(0xFFffFFff)
+        .setPort(OFPort.of((i % 3) + 1));
+        .build();
+        actionList.add(output);
+
+        OFFlowAdd flowAdd = myFactory.buildFlowAdd()
+            .setBufferId(OFBufferId.NO_BUFFER)
+            // .setHardTimeout(3600)
+            // .setIdleTimeout(10)
+            .setPriority(32768)
+            .setMatch(match)
+            .setActions(actionList)
+            .setTableId(TableId.of(1))
+            .build();
+
+        sw.write(flowAdd);
       }
-      MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
-                              "00:00:00:00:00:03", "00:00:00:00:00:04",
-                              "00:00:00:00:00:05", "00:00:00:00:00:06"};
-      IOFSwitch sw =this.floodlightProvider.getSwitch(switches[(switchnum)]);
+
       OFFactory myFactory = sw.getOFFactory();
-      Match match = myFactory.buildMatch()
-      .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i]))
-      .build();
 
+      ArrayList<OFGroupMod> groupMods = new ArrayList<OFGroupMod>();
       ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-      OFActions actions = myFactory.actions();
-      OFActionOutput output = actions.buildOutput()
-      .setMaxLen(0xFFffFFff)
-      .setPort(OFPort.of((i % 2) + 1));
-      .build();
-      actionList.add(output);
 
-      OFFlowAdd flowAdd = myFactory.buildFlowAdd()
-          .setBufferId(OFBufferId.NO_BUFFER)
-          //.setHardTimeout(3600)
-          //.setIdleTimeout(10)
-          .setPriority(10000)
-          .setMatch(match)
-          .setActions(actionList)
-          .setTableId(TableId.of(1))
-          .build();
+      OFGroupAdd myGroup = myFactory.buildGroupAdd()
+        .setGroupType(OFGroupType.ALL)
+        .setGroup(OFGroup.of(1))
+        .setBuckets(myBucketList)
+        .build();
 
-      sw.write(flowAdd);
-    }
-    for(int i = 0; i < 6; i++){
-      int switchnum;
-      if(i < 3){
-        switchnum = 3;
-      }
-      else if(i < 6){
-        switchnum = 4;
-      }
-      MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:03",
-                              "00:00:00:00:00:05", "00:00:00:00:00:02",
-                              "00:00:00:00:00:04", "00:00:00:00:00:06"};
-      IOFSwitch sw =this.floodlightProvider.getSwitch(switches[switchnum]);
-      OFFactory myFactory = sw.getOFFactory();
-      Match match = myFactory.buildMatch()
-      .setExact(MatchField.ETH_DST, EthType.of(MacAddress.of(MacAddr[i])) //ARP Type in Hex
-      .build();
+      IOFSwitch mySwitch = switchService.getSwitch(DatapathId.of(1));
+      mySwitch.write(groupMods);
 
-      ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-      OFActions actions = myFactory.actions();
-      OFActionOutput output = actions.buildOutput()
-      .setMaxLen(0xFFffFFff)
-      .setPort(OFPort.of((i % 3) + 1));
-      .build();
-      actionList.add(output);
+      ArrayList<OFBucket> bucketList = new ArrayList<OFBucket>();
 
-      OFFlowAdd flowAdd = myFactory.buildFlowAdd()
-          .setBufferId(OFBufferId.NO_BUFFER)
-          // .setHardTimeout(3600)
-          // .setIdleTimeout(10)
-          .setPriority(32768)
-          .setMatch(match)
-          .setActions(actionList)
-          .setTableId(TableId.of(1))
-          .build();
-
-      sw.write(flowAdd);
-  }
-
+      OFBucket myBucket = myFactory.buildBucket()
+        .setActions(actionList)
+        .setWatchGroup(OFGroup.of(23)) /* Monitor liveness of OFGroup 23. */
+        .setWatchPort(OFPort.of(7)) /* Monitor liveness of OFPort 7. */
+        .build();*/
     }
     //Need to install ARP requests into switches.
     //Go straight from switch to controller.
 
-
-    /*
-    h1: l1 port 3
-    h2: l1 port 4
-    s4: l1 port 1
-    s4: l2 port 2
     /**
      * @param floodlightProvider the floodlightProvider to set
      */
@@ -292,56 +307,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
             sw.write(po);
           }
-          // MacAddress src = eth.getSourceMACAddress();
-          // String srcString = src.toString();
-          // MacAddress dst = eth.getDestinationMACAddress();
-          // String dstString = dst.toString();
-          // OFPort dstPort;
-          // if(portFound) {
-          //   //Tell switch to forward packet out this port
-          //   //Install flow entry
-          //   OFFactory myFactory = sw.getOFFactory();
-          //   Match match = myFactory.buildMatch()
-          //   .setExact(MatchField.ETH_DST, dst)
-          //   .build();
-          //
-          //   ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-          //   OFActions actions = myFactory.actions();
-          //   OFActionOutput output = actions.buildOutput()
-          //   .setMaxLen(0xFFffFFff)
-          //   .setPort(port)
-          //   .build();
-          //   actionList.add(output);
-          //
-          //   OFFlowAdd flowAdd = myFactory.buildFlowAdd()
-          //       .setBufferId(OFBufferId.NO_BUFFER)
-          //       .setHardTimeout(3600)
-          //       .setIdleTimeout(10)
-          //       .setPriority(32768)
-          //       .setMatch(match)
-          //       .setActions(actionList)
-          //       .setTableId(TableId.of(1))
-          //       .build();
-          //
-          //   sw.write(flowAdd);
-          // }
-          // else {
-          //   //tell switch to flood packet on every
-          //   //port except source port
-          //   Ethernet l2 = new Ethernet();
-          //   l2.setSourceMACAddress(src);
-          //   l2.setDestinationMACAddress(MacAddress.BROADCAST);
-          //
-          //   byte[] serializedData = l2.serialize();
-          //
-          //   OFPacketOut po = sw.getOFFactory().buildPacketOut()
-          //   .setData(serializedData)
-          //   .setActions(Collections.singletonList((OFAction) sw.getOFFactory()
-          //     .actions().output(OFPort.FLOOD, 0xffFFffFF)))
-          //   .setInPort(OFPort.CONTROLLER)
-          //   .build();
-          //   sw.write(po);
-          // }
           break;
 
         default:
