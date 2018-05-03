@@ -16,6 +16,8 @@ import net.floodlightcontroller.core.module.FloodlightModuleContext;
 import net.floodlightcontroller.core.module.FloodlightModuleException;
 import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
+import net.floodlightcontroller.linkdiscovery.*;
+import net.floodlightcontroller.core.internal.IOFSwitchService;
 
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFMessage;
@@ -28,42 +30,63 @@ import org.projectfloodlight.openflow.protocol.action.OFActions;
 import org.projectfloodlight.openflow.protocol.action.OFActionOutput;
 import org.projectfloodlight.openflow.protocol.match.*;
 import org.projectfloodlight.openflow.types.*;
+import org.projectfloodlight.openflow.types.DatapathId;
+import org.projectfloodlight.openflow.types.EthType;
+import org.projectfloodlight.openflow.types.IPv4Address;
+import org.projectfloodlight.openflow.types.IPv6Address;
+import org.projectfloodlight.openflow.types.IpProtocol;
+import org.projectfloodlight.openflow.types.MacAddress;
 import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.IPv4;
+import net.floodlightcontroller.packet.IPv6;
+import net.floodlightcontroller.packet.TCP;
+import net.floodlightcontroller.packet.UDP;
+import net.floodlightcontroller.packet.Data;
 import org.projectfloodlight.openflow.util.*;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
+import org.python.google.common.collect.ImmutableList;
 
 public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
     private IFloodlightProviderService floodlightProvider;
+    protected ILinkDiscoveryService linkDiscoverer;
+
+    public int s4Counter = 0;
+    public int s5Counter = 0;
+    public int priority = 1;
+
 
     /*
         # PROJ3 Define your data structures here
     */
     static public HashMap<IPv4Address, MacAddress> ARPmap = new HashMap<>();
 
-    static public DatapathId switches[5];
+    // public DatapathId switches[];
+    // switches = new DatapathId[5];
 
-    public void switchInitializer(DatapathId switches[5]){
-      switches[0] = DataPathId.of("00:00:00:00:00:00:00:01");
-      switches[1] = DataPathId.of("00:00:00:00:00:00:00:02");
-      switches[2] = DataPathId.of("00:00:00:00:00:00:00:03");
-      switches[3] = DataPathId.of("00:00:00:00:00:00:00:04");
-      switches[4] = DataPathId.of("00:00:00:00:00:00:00:05");
+    public DatapathId[] switches = new DatapathId[5];
+
+    public void switchInitializer(DatapathId[] switches){
+      switches[0] = DatapathId.of("00:00:00:00:00:00:00:01"); //L1
+      switches[1] = DatapathId.of("00:00:00:00:00:00:00:02"); //L2
+      switches[2] = DatapathId.of("00:00:00:00:00:00:00:03"); //L3
+      switches[3] = DatapathId.of("00:00:00:00:00:00:00:04"); //S4
+      switches[4] = DatapathId.of("00:00:00:00:00:00:00:05"); //S5
     }
 
-    public void ARPinitilaizer(HashMap<IPv4Address, MacAddress> ARPmap) {
-      IPv4Address ip1 = IPv4Addres.of("10.0.0.1");
+    public void ARPinitializer(HashMap<IPv4Address, MacAddress> ARPmap) {
+      IPv4Address ip1 = IPv4Address.of("10.0.0.1");
       MacAddress mac1 = MacAddress.of("00:00:00:00:00:01");
-      IPv4Address ip2 = IPv4Addres.of("10.0.0.2");
+      IPv4Address ip2 = IPv4Address.of("10.0.0.2");
       MacAddress mac2 = MacAddress.of("00:00:00:00:00:02");
-      IPv4Address ip3 = IPv4Addres.of("10.0.0.3");
+      IPv4Address ip3 = IPv4Address.of("10.0.0.3");
       MacAddress mac3 = MacAddress.of("00:00:00:00:00:03");
-      IPv4Address ip4 = IPv4Addres.of("10.0.0.4");
+      IPv4Address ip4 = IPv4Address.of("10.0.0.4");
       MacAddress mac4 = MacAddress.of("00:00:00:00:00:04");
-      IPv4Address ip5 = IPv4Addres.of("10.0.0.5");
+      IPv4Address ip5 = IPv4Address.of("10.0.0.5");
       MacAddress mac5 = MacAddress.of("00:00:00:00:00:05");
-      IPv4Address ip6 = IPv4Addres.of("10.0.0.6");
+      IPv4Address ip6 = IPv4Address.of("10.0.0.6");
       MacAddress mac6 = MacAddress.of("00:00:00:00:00:06");
       ARPmap.put(ip1, mac1);
       ARPmap.put(ip2, mac2);
@@ -76,7 +99,7 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     public void FlowTableInitilizer()
     {
       for(int i = 0; i < 5; i++){
-        IOFSwitch sw =this.floodlightProvider.getSwitch(switches[i]);
+        IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[i]);
         OFFactory myFactory = sw.getOFFactory();
         Match match = myFactory.buildMatch()
         .setExact(MatchField.ETH_TYPE, EthType.of(0x806)) //ARP Type in Hex
@@ -86,7 +109,7 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         OFActions actions = myFactory.actions();
         OFActionOutput output = actions.buildOutput()
         .setMaxLen(0xFFffFFff)
-        .setPort(OFPort.CONTROLLER);
+        .setPort(OFPort.CONTROLLER)
         .build();
         actionList.add(output);
 
@@ -114,20 +137,20 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         else if (i < 6){
           switchnum = 2;
         }
-        MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
+        String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
                                 "00:00:00:00:00:03", "00:00:00:00:00:04",
                                 "00:00:00:00:00:05", "00:00:00:00:00:06"};
-        IOFSwitch sw =this.floodlightProvider.getSwitch(switches[(switchnum)]);
+        IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[(switchnum)]);
         OFFactory myFactory = sw.getOFFactory();
         Match match = myFactory.buildMatch()
-        .setExact(MatchField.ETH_DST, EthType.of(MacAddress.of(MacAddr[i]))
+        .setExact(MatchField.ETH_DST, EthType.of(MacAddress.of(MacAddr[i])))
         .build();
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         OFActions actions = myFactory.actions();
         OFActionOutput output = actions.buildOutput()
         .setMaxLen(0xFFffFFff)
-        .setPort(OFPort.of((i % 2) + 3));
+        .setPort(OFPort.of((i % 2) + 3))
         .build();
         actionList.add(output);
 
@@ -155,20 +178,20 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         else if (i < 6){
           switchnum = 2;
         }
-        MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
+        String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
                                 "00:00:00:00:00:03", "00:00:00:00:00:04",
                                 "00:00:00:00:00:05", "00:00:00:00:00:06"};
-        IOFSwitch sw =this.floodlightProvider.getSwitch(switches[(switchnum)]);
+        IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[(switchnum)]);
         OFFactory myFactory = sw.getOFFactory();
         Match match = myFactory.buildMatch()
-        .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i]))
+        .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i])))
         .build();
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         OFActions actions = myFactory.actions();
         OFActionOutput output = actions.buildOutput()
         .setMaxLen(0xFFffFFff)
-        .setPort(OFPort.of((i % 2) + 1));
+        .setPort(OFPort.of((i % 2) + 1))
         .build();
         actionList.add(output);
 
@@ -192,20 +215,20 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         else if(i < 6){
           switchnum = 4;
         }
-        MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:03",
+        String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:03",
                                 "00:00:00:00:00:05", "00:00:00:00:00:02",
                                 "00:00:00:00:00:04", "00:00:00:00:00:06"};
-        IOFSwitch sw =this.floodlightProvider.getSwitch(switches[switchnum]);
+        IOFSwitch sw =this.floodlightProvider.switchServiceSwitch(switches[switchnum]);
         OFFactory myFactory = sw.getOFFactory();
         Match match = myFactory.buildMatch()
-        .setExact(MatchField.ETH_DST, EthType.of(MacAddress.of(MacAddr[i])) //ARP Type in Hex
+        .setExact(MatchField.ETH_DST, EthType.of(MacAddress.of(MacAddr[i])))
         .build();
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         OFActions actions = myFactory.actions();
         OFActionOutput output = actions.buildOutput()
         .setMaxLen(0xFFffFFff)
-        .setPort(OFPort.of((i % 3) + 1));
+        .setPort(OFPort.of((i % 3) + 1))
         .build();
         actionList.add(output);
 
@@ -221,28 +244,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
         sw.write(flowAdd);
       }
-
-      OFFactory myFactory = sw.getOFFactory();
-
-      ArrayList<OFGroupMod> groupMods = new ArrayList<OFGroupMod>();
-      ArrayList<OFAction> actionList = new ArrayList<OFAction>();
-
-      OFGroupAdd myGroup = myFactory.buildGroupAdd()
-        .setGroupType(OFGroupType.ALL)
-        .setGroup(OFGroup.of(1))
-        .setBuckets(myBucketList)
-        .build();
-
-      IOFSwitch mySwitch = switchService.getSwitch(DatapathId.of(1));
-      mySwitch.write(groupMods);
-
-      ArrayList<OFBucket> bucketList = new ArrayList<OFBucket>();
-
-      OFBucket myBucket = myFactory.buildBucket()
-        .setActions(actionList)
-        .setWatchGroup(OFGroup.of(23)) /* Monitor liveness of OFGroup 23. */
-        .setWatchPort(OFPort.of(7)) /* Monitor liveness of OFPort 7. */
-        .build();*/
     }
     //Need to install ARP requests into switches.
     //Go straight from switch to controller.
@@ -316,8 +317,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         return Command.CONTINUE;
     }
 
-
-
     @Override
     public boolean isCallbackOrderingPrereq(OFType type, String name) {
         return false;
@@ -356,129 +355,127 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     public void init(FloodlightModuleContext context)
             throws FloodlightModuleException {
         floodlightProvider = context.getServiceImpl(IFloodlightProviderService.class);
+        linkDiscoverer = context.getServiceImpl( ILinkDiscoveryService.class );
+
+        Map<String, String> configParameters = context.getConfigParams(this);
+        tmp = configParameters.get("remove-flows-on-link-or-port-down");
+        if (tmp != null) {
+        REMOVE_FLOWS_ON_LINK_OR_PORT_DOWN = Boolean.parseBoolean(tmp);
+        }
     }
 
     @Override
     public void startUp(FloodlightModuleContext context) {
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
+
+        if (REMOVE_FLOWS_ON_LINK_OR_PORT_DOWN) {
+          linkService.addListener(this);
+        }
     }
 
-    // @Override
-    // public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
-    //     for (LDUpdate u : updateList) {
-    //         /* Remove flows on either side if link/port went down */
-    //         if (u.getOperation() == UpdateOperation.LINK_REMOVED ||
-    //                 u.getOperation() == UpdateOperation.PORT_DOWN ||
-    //                 u.getOperation() == UpdateOperation.TUNNEL_PORT_REMOVED) {
-    //             Set<OFMessage> msgs = new HashSet<OFMessage>();
-    //
-    //             if (u.getSrc() != null && !u.getSrc().equals(DatapathId.NONE)) {
-    //                 IOFSwitch srcSw = switchService.getSwitch(u.getSrc());
-    //                 /* src side of link */
-    //                 if (srcSw != null) {
-    //                     Set<U64> ids = flowSetIdRegistry.getFlowSetIds(
-    //                             new NodePortTuple(u.getSrc(), u.getSrcPort()));
-    //                     if (ids != null) {
-    //                         Iterator<U64> i = ids.iterator();
-    //                         while (i.hasNext()) {
-    //                             U64 id = i.next();
-    //                             U64 cookie = id.or(DEFAULT_FORWARDING_COOKIE);
-    //                             U64 cookieMask = U64.of(FLOWSET_MASK).or(AppCookie.getAppFieldMask());
-    //
-    //                             /* Delete flows matching on src port and outputting to src port */
-    //                             msgs = buildDeleteFlows(u.getSrcPort(), msgs, srcSw, cookie, cookieMask);
-    //                             messageDamper.write(srcSw, msgs);
-    //                             log.debug("src: Removing flows to/from DPID={}, port={}", u.getSrc(), u.getSrcPort());
-    //                             log.debug("src: Cookie/mask {}/{}", cookie, cookieMask);
-    //
-    //                             /*
-    //                              * Now, for each ID on this particular failed link, remove
-    //                              * all other flows in the network using this ID.
-    //                              */
-    //                             Set<NodePortTuple> npts = flowSetIdRegistry.getNodePortTuples(id);
-    //                             if (npts != null) {
-    //                                 for (NodePortTuple npt : npts) {
-    //                                     msgs.clear();
-    //                                     IOFSwitch sw = switchService.getSwitch(npt.getNodeId());
-    //                                     if (sw != null) {
-    //
-    //                                         /* Delete flows matching on npt port and outputting to npt port*/
-    //                                         msgs = buildDeleteFlows(npt.getPortId(), msgs, sw, cookie, cookieMask);
-    //                                         messageDamper.write(sw, msgs);
-    //                                         log.debug("src: Removing same-cookie flows to/from DPID={}, port={}", npt.getNodeId(), npt.getPortId());
-    //                                         log.debug("src: Cookie/mask {}/{}", cookie, cookieMask);
-    //                                     }
-    //                                 }
-    //                             }
-    //                             flowSetIdRegistry.removeExpiredFlowSetId(id, new NodePortTuple(u.getSrc(), u.getSrcPort()), i);
-    //                         }
-    //                     }
-    //                 }
-    //                 flowSetIdRegistry.removeNodePortTuple(new NodePortTuple(u.getSrc(), u.getSrcPort()));
-    //             }
-    //
-    //             /* must be a link, not just a port down, if we have a dst switch */
-    //             if (u.getDst() != null && !u.getDst().equals(DatapathId.NONE)) {
-    //                 /* dst side of link */
-    //                 IOFSwitch dstSw = switchService.getSwitch(u.getDst());
-    //                 if (dstSw != null) {
-    //                     Set<U64> ids = flowSetIdRegistry.getFlowSetIds(
-    //                             new NodePortTuple(u.getDst(), u.getDstPort()));
-    //                     if (ids != null) {
-    //                         Iterator<U64> i = ids.iterator();
-    //                         while (i.hasNext()) {
-    //                             U64 id = i.next();
-    //                             U64 cookie = id.or(DEFAULT_FORWARDING_COOKIE);
-    //                             U64 cookieMask = U64.of(FLOWSET_MASK).or(AppCookie.getAppFieldMask());
-    //                             /* Delete flows matching on dst port and outputting to dst port */
-    //                             msgs = buildDeleteFlows(u.getDstPort(), msgs, dstSw, cookie, cookieMask);
-    //                             messageDamper.write(dstSw, msgs);
-    //                             log.debug("dst: Removing flows to/from DPID={}, port={}", u.getDst(), u.getDstPort());
-    //                             log.debug("dst: Cookie/mask {}/{}", cookie, cookieMask);
-    //
-    //                             /*
-    //                              * Now, for each ID on this particular failed link, remove
-    //                              * all other flows in the network using this ID.
-    //                              */
-    //                             Set<NodePortTuple> npts = flowSetIdRegistry.getNodePortTuples(id);
-    //                             if (npts != null) {
-    //                                 for (NodePortTuple npt : npts) {
-    //                                     msgs.clear();
-    //                                     IOFSwitch sw = switchService.getSwitch(npt.getNodeId());
-    //                                     if (sw != null) {
-    //                                         /* Delete flows matching on npt port and outputting on npt port */
-    //                                         msgs = buildDeleteFlows(npt.getPortId(), msgs, sw, cookie, cookieMask);
-    //                                         messageDamper.write(sw, msgs);
-    //                                         log.debug("dst: Removing same-cookie flows to/from DPID={}, port={}", npt.getNodeId(), npt.getPortId());
-    //                                         log.debug("dst: Cookie/mask {}/{}", cookie, cookieMask);
-    //                                     }
-    //                                 }
-    //                             }
-    //                             flowSetIdRegistry.removeExpiredFlowSetId(id, new NodePortTuple(u.getDst(), u.getDstPort()), i);
-    //                         }
-    //                     }
-    //                 }
-    //                 flowSetIdRegistry.removeNodePortTuple(new NodePortTuple(u.getDst(), u.getDstPort()));
-    //             }
-    //         }
-    //     }
-    // }
+    public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
+        for (LDUpdate u : updateList) {
+            /* Remove flows on either side if link/port went down */
+            if (u.getOperation() == UpdateOperation.LINK_REMOVED)
+            {
+              if (u.getSrc() != null && !u.getSrc().equals(DatapathId.NONE)) {
+                IOFSwitch srcSw = switchService.getSwitch(u.getSrc());
+                if(srcSw.equals(switches[3])){
+                  s4Counter++;
+                  if(s4Counter > 2){
+                    //new flowmods to direct to s5
+                    priority++;
+                    for(int i = 0; i < 6; i++){
+                      int switchnum;
+                      if(i < 2){
+                        switchnum = 0;
+                      }
+                      else if(i < 4){
+                        switchnum = 1;
+                      }
+                      else if (i < 6){
+                        switchnum = 2;
+                      }
+                      String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
+                                              "00:00:00:00:00:03", "00:00:00:00:00:04",
+                                              "00:00:00:00:00:05", "00:00:00:00:00:06"};
+                      IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[(switchnum)]);
+                      OFFactory myFactory = sw.getOFFactory();
+                      Match match = myFactory.buildMatch()
+                      .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i])))
+                      .build();
 
-}
+                      ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+                      OFActions actions = myFactory.actions();
+                      OFActionOutput output = actions.buildOutput()
+                      .setMaxLen(0xFFffFFff)
+                      .setPort(OFPort.of(2))
+                      .build();
+                      actionList.add(output);
 
+                      OFFlowAdd flowAdd = myFactory.buildFlowAdd()
+                          .setBufferId(OFBufferId.NO_BUFFER)
+                          //.setHardTimeout(3600)
+                          //.setIdleTimeout(10)
+                          .setPriority(10000 + priority)
+                          .setMatch(match)
+                          .setActions(actionList)
+                          .setTableId(TableId.of(1))
+                          .build();
 
+                      sw.write(flowAdd);
+                    }
+                  }
+                }
+                if(srcSw.equals(switches[4])){
+                  s5Counter++;
+                  if(s5Counter > 2){
+                    //write new flowmods to direct to s4
+                    priority++;
+                    for(int i = 0; i < 6; i++){
+                      int switchnum;
+                      if(i < 2){
+                        switchnum = 0;
+                      }
+                      else if(i < 4){
+                        switchnum = 1;
+                      }
+                      else if (i < 6){
+                        switchnum = 2;
+                      }
+                      String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
+                                              "00:00:00:00:00:03", "00:00:00:00:00:04",
+                                              "00:00:00:00:00:05", "00:00:00:00:00:06"};
+                      IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[(switchnum)]);
+                      OFFactory myFactory = sw.getOFFactory();
+                      Match match = myFactory.buildMatch()
+                      .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i])))
+                      .build();
 
+                      ArrayList<OFAction> actionList = new ArrayList<OFAction>();
+                      OFActions actions = myFactory.actions();
+                      OFActionOutput output = actions.buildOutput()
+                      .setMaxLen(0xFFffFFff)
+                      .setPort(OFPort.of(1))
+                      .build();
+                      actionList.add(output);
 
+                      OFFlowAdd flowAdd = myFactory.buildFlowAdd()
+                          .setBufferId(OFBufferId.NO_BUFFER)
+                          //.setHardTimeout(3600)
+                          //.setIdleTimeout(10)
+                          .setPriority(10000 + priority)
+                          .setMatch(match)
+                          .setActions(actionList)
+                          .setTableId(TableId.of(1))
+                          .build();
 
-/*case ARP IN:
-
-get src port
-get src Mac
-get src IP
-get dst IP
-
-convert dst IP to Mac
-
-create ARP response with dst Mac
-
-write to switch*/
+                      sw.write(flowAdd);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
