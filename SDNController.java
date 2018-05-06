@@ -6,6 +6,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.List;
 import java.util.*;
 
 import net.floodlightcontroller.core.FloodlightContext;
@@ -18,6 +19,14 @@ import net.floodlightcontroller.core.module.IFloodlightModule;
 import net.floodlightcontroller.core.module.IFloodlightService;
 import net.floodlightcontroller.linkdiscovery.*;
 import net.floodlightcontroller.core.internal.IOFSwitchService;
+import net.floodlightcontroller.linkdiscovery.ILinkDiscovery.LDUpdate;
+import net.floodlightcontroller.packet.Ethernet;
+import net.floodlightcontroller.packet.IPv4;
+import net.floodlightcontroller.packet.IPv6;
+import net.floodlightcontroller.packet.TCP;
+import net.floodlightcontroller.packet.UDP;
+import net.floodlightcontroller.packet.Data;
+import net.floodlightcontroller.routing.ForwardingBase;
 
 import org.projectfloodlight.openflow.protocol.OFFlowAdd;
 import org.projectfloodlight.openflow.protocol.OFMessage;
@@ -36,12 +45,6 @@ import org.projectfloodlight.openflow.types.IPv4Address;
 import org.projectfloodlight.openflow.types.IPv6Address;
 import org.projectfloodlight.openflow.types.IpProtocol;
 import org.projectfloodlight.openflow.types.MacAddress;
-import net.floodlightcontroller.packet.Ethernet;
-import net.floodlightcontroller.packet.IPv4;
-import net.floodlightcontroller.packet.IPv6;
-import net.floodlightcontroller.packet.TCP;
-import net.floodlightcontroller.packet.UDP;
-import net.floodlightcontroller.packet.Data;
 import org.projectfloodlight.openflow.util.*;
 import org.projectfloodlight.openflow.protocol.OFFactory;
 import org.projectfloodlight.openflow.protocol.OFFlowMod;
@@ -49,24 +52,23 @@ import org.python.google.common.collect.ImmutableList;
 
 public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
+    protected static boolean REMOVE_FLOWS_ON_LINK_OR_PORT_DOWN;
     private IFloodlightProviderService floodlightProvider;
     protected ILinkDiscoveryService linkDiscoverer;
+    protected IOFSwitchService switchService;
 
-    public int s4Counter = 0;
-    public int s5Counter = 0;
-    public int priority = 1;
+    public int s4Counter = 0; //Counter of link failures to S4
+    public int s5Counter = 0; //Counter of link failures to S5
+    public int priority = 1;  //priority counter that is incremented to give
+                              //newer flow entries higher priority over old ones
 
-
-    /*
-        # PROJ3 Define your data structures here
-    */
+    //Maps the IPv4 addresses and MAC addresses of the hosts
     static public HashMap<IPv4Address, MacAddress> ARPmap = new HashMap<>();
 
-    // public DatapathId switches[];
-    // switches = new DatapathId[5];
-
+    //Array storing the DatapathId's of the switches
     public DatapathId[] switches = new DatapathId[5];
 
+    //fill switch DatapathId array
     public void switchInitializer(DatapathId[] switches){
       switches[0] = DatapathId.of("00:00:00:00:00:00:00:01"); //L1
       switches[1] = DatapathId.of("00:00:00:00:00:00:00:02"); //L2
@@ -75,6 +77,7 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
       switches[4] = DatapathId.of("00:00:00:00:00:00:00:05"); //S5
     }
 
+    //Fill ARPmap of host IP and MAC addresses
     public void ARPinitializer(HashMap<IPv4Address, MacAddress> ARPmap) {
       IPv4Address ip1 = IPv4Address.of("10.0.0.1");
       MacAddress mac1 = MacAddress.of("00:00:00:00:00:01");
@@ -96,10 +99,12 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
       ARPmap.put(ip6, mac6);
     }
 
+    //Create flow entries for switches
     public void FlowTableInitilizer()
     {
+      //Create an entry in each switch to send ARP messages to the controller
       for(int i = 0; i < 5; i++){
-        IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[i]);
+        IOFSwitch sw = switchService.getSwitch(switches[i]);
         OFFactory myFactory = sw.getOFFactory();
         Match match = myFactory.buildMatch()
         .setExact(MatchField.ETH_TYPE, EthType.of(0x806)) //ARP Type in Hex
@@ -115,8 +120,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
         OFFlowAdd flowAdd = myFactory.buildFlowAdd()
             .setBufferId(OFBufferId.NO_BUFFER)
-            // .setHardTimeout(3600)
-            // .setIdleTimeout(10)
             .setPriority(32768)
             .setMatch(match)
             .setActions(actionList)
@@ -125,9 +128,11 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
         sw.write(flowAdd);
       }
-      //flow entries from leaves to hosts
+      //Create flow entries for leaf switches to send traffic to hosts based on
+      //the destination MAC address. These entries are given a higher priority,
+      //so packets destined for a connected host are not sent to spine switches.
       for(int i = 0; i < 6; i++){
-        int switchnum;
+        int switchnum = 0; //Switch that the flow entry is being made for
         if(i < 2){
           switchnum = 0;
         }
@@ -137,27 +142,29 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         else if (i < 6){
           switchnum = 2;
         }
+        //MAC Addresses of hosts
         String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
                                 "00:00:00:00:00:03", "00:00:00:00:00:04",
                                 "00:00:00:00:00:05", "00:00:00:00:00:06"};
-        IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[(switchnum)]);
+        //Get the current switch with switchnum
+        IOFSwitch sw =switchService.getSwitch(switches[(switchnum)]);
         OFFactory myFactory = sw.getOFFactory();
         Match match = myFactory.buildMatch()
-        .setExact(MatchField.ETH_DST, EthType.of(MacAddress.of(MacAddr[i])))
+        //Match the destination MAC address
+        .setExact(MatchField.ETH_DST, MacAddress.of(MacAddr[i]))
         .build();
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         OFActions actions = myFactory.actions();
         OFActionOutput output = actions.buildOutput()
         .setMaxLen(0xFFffFFff)
+        //Set output port based on the destination host
         .setPort(OFPort.of((i % 2) + 3))
         .build();
         actionList.add(output);
 
         OFFlowAdd flowAdd = myFactory.buildFlowAdd()
             .setBufferId(OFBufferId.NO_BUFFER)
-            // .setHardTimeout(3600)
-            // .setIdleTimeout(10)
             .setPriority(32768)
             .setMatch(match)
             .setActions(actionList)
@@ -166,9 +173,12 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
         sw.write(flowAdd);
       }
-      //Flow entries from leaves to spines
+      //Create flow entries from leaf switches to spine switches based on the
+      //source MAC address. These flow entries are given a lower priority, so
+      //packets destined for hosts connected to the leaf switches are not sent
+      //to the spine switches.
       for(int i = 0; i < 6; i++){
-        int switchnum;
+        int switchnum = 0; //Switch that the flow entry is being made for
         if(i < 2){
           switchnum = 0;
         }
@@ -178,27 +188,28 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         else if (i < 6){
           switchnum = 2;
         }
+        //MAC addresses of hosts
         String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
                                 "00:00:00:00:00:03", "00:00:00:00:00:04",
                                 "00:00:00:00:00:05", "00:00:00:00:00:06"};
-        IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[(switchnum)]);
+        IOFSwitch sw = switchService.getSwitch(switches[(switchnum)]);
         OFFactory myFactory = sw.getOFFactory();
         Match match = myFactory.buildMatch()
-        .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i])))
+        //Match the source MAC address
+        .setExact(MatchField.ETH_SRC, MacAddress.of(MacAddr[i]))
         .build();
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         OFActions actions = myFactory.actions();
         OFActionOutput output = actions.buildOutput()
         .setMaxLen(0xFFffFFff)
+        //Set output port based on the source host
         .setPort(OFPort.of((i % 2) + 1))
         .build();
         actionList.add(output);
 
         OFFlowAdd flowAdd = myFactory.buildFlowAdd()
             .setBufferId(OFBufferId.NO_BUFFER)
-            //.setHardTimeout(3600)
-            //.setIdleTimeout(10)
             .setPriority(10000)
             .setMatch(match)
             .setActions(actionList)
@@ -207,8 +218,10 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
         sw.write(flowAdd);
       }
+      //Create flow entries from spine switches to leaf switches based on the
+      //destination MAC address.
       for(int i = 0; i < 6; i++){
-        int switchnum;
+        int switchnum = 0; //Switch that the flow entry is being made for
         if(i < 3){
           switchnum = 3;
         }
@@ -218,24 +231,24 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:03",
                                 "00:00:00:00:00:05", "00:00:00:00:00:02",
                                 "00:00:00:00:00:04", "00:00:00:00:00:06"};
-        IOFSwitch sw =this.floodlightProvider.switchServiceSwitch(switches[switchnum]);
+        IOFSwitch sw =switchService.getSwitch(switches[switchnum]);
         OFFactory myFactory = sw.getOFFactory();
         Match match = myFactory.buildMatch()
-        .setExact(MatchField.ETH_DST, EthType.of(MacAddress.of(MacAddr[i])))
+        //Match the destination MAC address
+        .setExact(MatchField.ETH_DST, MacAddress.of(MacAddr[i]))
         .build();
 
         ArrayList<OFAction> actionList = new ArrayList<OFAction>();
         OFActions actions = myFactory.actions();
         OFActionOutput output = actions.buildOutput()
         .setMaxLen(0xFFffFFff)
+        //Set output port based on the destination host
         .setPort(OFPort.of((i % 3) + 1))
         .build();
         actionList.add(output);
 
         OFFlowAdd flowAdd = myFactory.buildFlowAdd()
             .setBufferId(OFBufferId.NO_BUFFER)
-            // .setHardTimeout(3600)
-            // .setIdleTimeout(10)
             .setPriority(32768)
             .setMatch(match)
             .setActions(actionList)
@@ -245,8 +258,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         sw.write(flowAdd);
       }
     }
-    //Need to install ARP requests into switches.
-    //Go straight from switch to controller.
 
     /**
      * @param floodlightProvider the floodlightProvider to set
@@ -260,26 +271,30 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         return EthernetLearning.class.getPackage().getName();
     }
 
+    //Process incoming ARP messages
     public Command receive(IOFSwitch sw, OFMessage msg, FloodlightContext cntx) {
     	switch (msg.getType()) {
         case PACKET_IN:
           Ethernet eth = IFloodlightProviderService.bcStore.get(cntx, IFloodlightProviderService.CONTEXT_PI_PAYLOAD);
-          //boolean portFound = false;
+          //If the packet is not an ARP message, ignore it
           if (eth.getEtherType() == EthType.ARP) {
             String switchMac = sw.getId().toString();
             OFPacketIn packetin_msg = (OFPacketIn) msg;
             OFPort port = packetin_msg.getInPort();
-            IPv4 ipv4 = eth.getPayload();
+            IPv4 ipv4 = new IPv4();
+            eth.setPayload(ipv4);
             IPv4Address srcIP = ipv4.getSourceAddress();
             IPv4Address dstIP = ipv4.getDestinationAddress();
             MacAddress srcMac = eth.getSourceMACAddress();
             MacAddress dstMac = ARPmap.get(dstIP);
 
+            //Set the source and destination MAC addresses
             Ethernet l2 = new Ethernet();
             l2.setSourceMACAddress(dstMac);
             l2.setDestinationMACAddress(srcMac);
             l2.setEtherType(EthType.ARP);
 
+            //Set the source and destination IP addresses
             IPv4 l3 = new IPv4();
             l3.setSourceAddress(dstIP);
             l3.setDestinationAddress(srcIP);
@@ -300,7 +315,8 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
             byte[] serializedData = l2.serialize();
 
-            OFPacketOut po = sw.getOFFactory().buildPacketOut() /* mySwitch is some IOFSwitch object */
+            //Build and send packet
+            OFPacketOut po = sw.getOFFactory().buildPacketOut()
             .setData(serializedData)
             .setActions(Collections.singletonList((OFAction) sw.getOFFactory().actions().output(port, 0xffFFffFF)))
             .setInPort(OFPort.CONTROLLER)
@@ -358,9 +374,9 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
         linkDiscoverer = context.getServiceImpl( ILinkDiscoveryService.class );
 
         Map<String, String> configParameters = context.getConfigParams(this);
-        tmp = configParameters.get("remove-flows-on-link-or-port-down");
+        String tmp = configParameters.get("remove-flows-on-link-or-port-down");
         if (tmp != null) {
-        REMOVE_FLOWS_ON_LINK_OR_PORT_DOWN = Boolean.parseBoolean(tmp);
+          REMOVE_FLOWS_ON_LINK_OR_PORT_DOWN = Boolean.parseBoolean(tmp);
         }
     }
 
@@ -368,25 +384,26 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
     public void startUp(FloodlightModuleContext context) {
         floodlightProvider.addOFMessageListener(OFType.PACKET_IN, this);
 
-        if (REMOVE_FLOWS_ON_LINK_OR_PORT_DOWN) {
-          linkService.addListener(this);
-        }
     }
 
+    //Watches for link removed events. If the link down comes from s4, increment the
+    // s4Counter. If the link comes form s5, increment the s5Counter. If either of these counters
+    // is greater than 2, then all the links of that spine switch are down. When this occurs, flow
+    // entries are written to the leaf switches to route all outgoing packets to the spine switch that
+    // is up.
     public void linkDiscoveryUpdate(List<LDUpdate> updateList) {
         for (LDUpdate u : updateList) {
             /* Remove flows on either side if link/port went down */
-            if (u.getOperation() == UpdateOperation.LINK_REMOVED)
+            if (u.getOperation().toString() == "Link Removed")
             {
               if (u.getSrc() != null && !u.getSrc().equals(DatapathId.NONE)) {
                 IOFSwitch srcSw = switchService.getSwitch(u.getSrc());
                 if(srcSw.equals(switches[3])){
                   s4Counter++;
                   if(s4Counter > 2){
-                    //new flowmods to direct to s5
                     priority++;
                     for(int i = 0; i < 6; i++){
-                      int switchnum;
+                      int switchnum = 0; //Switch that flow entries are being made for
                       if(i < 2){
                         switchnum = 0;
                       }
@@ -399,10 +416,10 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                       String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
                                               "00:00:00:00:00:03", "00:00:00:00:00:04",
                                               "00:00:00:00:00:05", "00:00:00:00:00:06"};
-                      IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[(switchnum)]);
+                      IOFSwitch sw =switchService.getSwitch(switches[(switchnum)]);
                       OFFactory myFactory = sw.getOFFactory();
                       Match match = myFactory.buildMatch()
-                      .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i])))
+                      .setExact(MatchField.ETH_SRC, MacAddress.of(MacAddr[i]))
                       .build();
 
                       ArrayList<OFAction> actionList = new ArrayList<OFAction>();
@@ -415,8 +432,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
                       OFFlowAdd flowAdd = myFactory.buildFlowAdd()
                           .setBufferId(OFBufferId.NO_BUFFER)
-                          //.setHardTimeout(3600)
-                          //.setIdleTimeout(10)
                           .setPriority(10000 + priority)
                           .setMatch(match)
                           .setActions(actionList)
@@ -430,10 +445,9 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                 if(srcSw.equals(switches[4])){
                   s5Counter++;
                   if(s5Counter > 2){
-                    //write new flowmods to direct to s4
                     priority++;
                     for(int i = 0; i < 6; i++){
-                      int switchnum;
+                      int switchnum = 0;
                       if(i < 2){
                         switchnum = 0;
                       }
@@ -446,10 +460,10 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
                       String[] MacAddr = new String[] {"00:00:00:00:00:01", "00:00:00:00:00:02",
                                               "00:00:00:00:00:03", "00:00:00:00:00:04",
                                               "00:00:00:00:00:05", "00:00:00:00:00:06"};
-                      IOFSwitch sw =this.floodlightProvider.switchService.getSwitch(switches[(switchnum)]);
+                      IOFSwitch sw =switchService.getSwitch(switches[(switchnum)]);
                       OFFactory myFactory = sw.getOFFactory();
                       Match match = myFactory.buildMatch()
-                      .setExact(MatchField.ETH_SRC, EthType.of(MacAddress.of(MacAddr[i])))
+                      .setExact(MatchField.ETH_SRC, MacAddress.of(MacAddr[i]))
                       .build();
 
                       ArrayList<OFAction> actionList = new ArrayList<OFAction>();
@@ -462,8 +476,6 @@ public class EthernetLearning implements IFloodlightModule, IOFMessageListener {
 
                       OFFlowAdd flowAdd = myFactory.buildFlowAdd()
                           .setBufferId(OFBufferId.NO_BUFFER)
-                          //.setHardTimeout(3600)
-                          //.setIdleTimeout(10)
                           .setPriority(10000 + priority)
                           .setMatch(match)
                           .setActions(actionList)
